@@ -15,9 +15,11 @@ namespace XV {
 #define CONV_STR2DEC_2(str, i)  (CONV_STR2DEC_1(str, i)*10 + str[i+1]-'0')
 #define __TIME_SECONDS__        CONV_STR2DEC_2(__TIME__, 6)
 
-#define PAD_RANDOM(num) char pad##num[((__TIME_SECONDS__ + __COUNTER__) % 10 + 20)]{};
+#define PAD_RANDOM(num) char pad##num[((__TIME_SECONDS__ + __COUNTER__) % 8) + 4]{};
 
-#define XORFUNC(name, function) XV::XORFunc<decltype(function)*> name##(function);
+#define FILL_PAD(num)   for (auto i = 0; i < sizeof(pad##num); i++) { \
+                            pad##num[i] = (unsigned char)(__rdtsc() & 0xFF); \
+                        }
 
 #pragma pack( push, 1 )
     template<typename T>
@@ -28,9 +30,9 @@ namespace XV {
         PAD_RANDOM(2)
             unsigned char m_length;
         PAD_RANDOM(3)
-            T m_key;
+            unsigned long m_key;
         PAD_RANDOM(4)
-            T m_key2;
+            unsigned long m_key2;
         PAD_RANDOM(5)
 
     public:
@@ -41,10 +43,16 @@ namespace XV {
             m_key2 = {};
             m_length = sizeof(T);
 
-            for (auto i = 0u; i < sizeof(T); i++) {
+            FILL_PAD(1)
+            FILL_PAD(2)
+            FILL_PAD(3)
+            FILL_PAD(4)
+            FILL_PAD(5)
+             
+            for (auto i = 0u; i < sizeof(m_key); i++) {
                 *(reinterpret_cast<unsigned char*>(&m_key) + i) = (unsigned char)(__rdtsc() & 0xFF);
             }
-            for (auto i = 0u; i < sizeof(T); i++) {
+            for (auto i = 0u; i < sizeof(m_key2); i++) {
                 *(reinterpret_cast<unsigned char*>(&m_key2) + i) = (unsigned char)(__rdtsc() & 0xFF) ^ ~*reinterpret_cast<unsigned char*>(&m_key + i);
             }
         }
@@ -55,10 +63,16 @@ namespace XV {
             m_key2 = {};
             m_length = sizeof(T);
 
-            for (auto i = 0u; i < sizeof(T); ++i) {
+            FILL_PAD(1)
+            FILL_PAD(2)
+            FILL_PAD(3)
+            FILL_PAD(4)
+            FILL_PAD(5)
+
+            for (auto i = 0u; i < sizeof(m_key); ++i) {
                 *(reinterpret_cast<unsigned char*>(&m_key) + i) = (unsigned char)(__rdtsc() & 0xFF);
             }
-            for (auto i = 0u; i < sizeof(T); ++i) {
+            for (auto i = 0u; i < sizeof(m_key2); ++i) {
                 *(reinterpret_cast<unsigned char*>(&m_key2) + i) = (unsigned char)(__rdtsc() & 0xFF) ^ ~*reinterpret_cast<unsigned char*>(&m_key + i);
             }
 
@@ -67,16 +81,16 @@ namespace XV {
 
         FORCEINLINE void SetValue(T newValue) {
             T result = newValue;
-            for (int i = 0; i < m_length; ++i) {
-                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + i) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (m_length - i));
+            for (int i = 0; i < m_length; i++) {
+                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + (i % sizeof(m_key))) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (i % sizeof(m_key2)));
             }
             m_value = result;
         }
 
         FORCEINLINE T GetValue() {
             T result = m_value;
-            for (int i = 0; i < m_length; ++i) {
-                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + i) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (m_length - i));
+            for (int i = 0; i < m_length; i++) {
+                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + (i % sizeof(m_key))) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (i % sizeof(m_key2)));
             }
             return result;
         }
@@ -230,10 +244,13 @@ namespace XV {
         template<class... Args>
         FORCEINLINE decltype(auto) operator()(Args&&... args)
         {
-            return m_address()(args...);
+            return m_address.GetValue()(args...);
         }
     };
 #pragma pack( pop )
 
 }
+
+#define XORFUNC(name, function) XV::XORFunc<decltype(function)*> name##(function);
+
 
