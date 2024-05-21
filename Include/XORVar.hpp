@@ -1,4 +1,5 @@
 #pragma once
+#include <intrin.h>
 
 namespace XV {
 
@@ -10,7 +11,13 @@ namespace XV {
 #define FORCEINLINE inline
 #endif
 
-#define PAD_RANDOM(num) char pad##num[(__COUNTER__ % 5 + 1)]{};
+#define CONV_STR2DEC_1(str, i)  (str[i]>'0'?str[i]-'0':0)
+#define CONV_STR2DEC_2(str, i)  (CONV_STR2DEC_1(str, i)*10 + str[i+1]-'0')
+#define __TIME_SECONDS__        CONV_STR2DEC_2(__TIME__, 6)
+
+#define PAD_RANDOM(num) char pad##num[((__TIME_SECONDS__ + __COUNTER__) % 10 + 20)]{};
+
+#define XORFUNC(name, function) XV::XORFunc<decltype(function)*> name##(function);
 
 #pragma pack( push, 1 )
     template<typename T>
@@ -26,24 +33,8 @@ namespace XV {
             T m_key2;
         PAD_RANDOM(5)
 
-            FORCEINLINE void SetValue(T newValue) {
-            T result = newValue;
-            for (int i = 0; i < m_length; ++i) {
-                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + i) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (m_length - i));
-            }
-            m_value = result;
-        }
-
-        FORCEINLINE T GetValue() {
-            T result = m_value;
-            for (int i = 0; i < m_length; ++i) {
-                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + i) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (m_length - i));
-            }
-            return result;
-        }
-
     public:
-        
+
         FORCEINLINE XORVar() {
             m_value = {};
             m_key = {};
@@ -64,14 +55,30 @@ namespace XV {
             m_key2 = {};
             m_length = sizeof(T);
 
-            for (auto i = 0u; i < sizeof(T); i++) {
+            for (auto i = 0u; i < sizeof(T); ++i) {
                 *(reinterpret_cast<unsigned char*>(&m_key) + i) = (unsigned char)(__rdtsc() & 0xFF);
             }
-            for (auto i = 0u; i < sizeof(T); i++) {
+            for (auto i = 0u; i < sizeof(T); ++i) {
                 *(reinterpret_cast<unsigned char*>(&m_key2) + i) = (unsigned char)(__rdtsc() & 0xFF) ^ ~*reinterpret_cast<unsigned char*>(&m_key + i);
             }
 
             SetValue(newValue);
+        }
+
+        FORCEINLINE void SetValue(T newValue) {
+            T result = newValue;
+            for (int i = 0; i < m_length; ++i) {
+                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + i) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (m_length - i));
+            }
+            m_value = result;
+        }
+
+        FORCEINLINE T GetValue() {
+            T result = m_value;
+            for (int i = 0; i < m_length; ++i) {
+                *(reinterpret_cast<unsigned char*>(&result) + i) ^= i % 2 ? ~*reinterpret_cast<unsigned char*>(&m_key + i) : ~*reinterpret_cast<unsigned char*>(&m_key2 + (m_length - i));
+            }
+            return result;
         }
 
         FORCEINLINE void operator=(T newValue) {
@@ -223,9 +230,10 @@ namespace XV {
         template<class... Args>
         FORCEINLINE decltype(auto) operator()(Args&&... args)
         {
-            return m_address()(std::forward<Args>(args)...);
+            return m_address()(args...);
         }
     };
 #pragma pack( pop )
 
 }
+
